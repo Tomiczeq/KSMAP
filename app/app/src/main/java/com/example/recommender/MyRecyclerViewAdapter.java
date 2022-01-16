@@ -40,7 +40,7 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
         try {
             JSONObject placeData = placesData.getJSONObject(position);
             holder.placeName.setText(placeData.getString("name"));
-            holder.placeAddress.setText(placeData.getString("vicinity"));
+            holder.placeAddress.setText(placeData.getString("address"));
             holder.placeRatting.setText(placeData.getString("rating"));
         } catch (JSONException e) {
             e.printStackTrace();

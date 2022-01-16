@@ -66,33 +66,33 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
             }
         });
 
-        JSONArray array = new JSONArray();
-        JSONObject item = new JSONObject();
-        try {
-            item.put("name", "Test");
-            item.put("vicinity", "PodLabutkou");
-            item.put("rating", 4.8);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        array.put(item);
-        JSONObject item1 = new JSONObject();
-        try {
-            item1.put("name", "Test2");
-            item1.put("vicinity", "PodLabutkou");
-            item1.put("rating", 4.8);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        array.put(item1);
+//        JSONArray array = new JSONArray();
+//        JSONObject item = new JSONObject();
+//        try {
+//            item.put("name", "Test");
+//            item.put("vicinity", "PodLabutkou");
+//            item.put("rating", 4.8);
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+//        array.put(item);
+//        JSONObject item1 = new JSONObject();
+//        try {
+//            item1.put("name", "Test2");
+//            item1.put("vicinity", "PodLabutkou");
+//            item1.put("rating", 4.8);
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+//        array.put(item1);
 
-        // set up the RecyclerView
-        RecyclerView recyclerView = findViewById(R.id.search_results);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-//        adapter = new MyRecyclerViewAdapter(this, animalNames);
-        adapter = new MyRecyclerViewAdapter(this, array);
-        adapter.setClickListener(this);
-        recyclerView.setAdapter(adapter);
+//        // set up the RecyclerView
+//        RecyclerView recyclerView = findViewById(R.id.search_results);
+//        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+////        adapter = new MyRecyclerViewAdapter(this, animalNames);
+//        adapter = new MyRecyclerViewAdapter(this, array);
+//        adapter.setClickListener(this);
+//        recyclerView.setAdapter(adapter);
     }
 
     public RequestQueue getRequestQueue() {
@@ -110,16 +110,36 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                     public void onResponse(JSONObject response) {
                         Log.i(TAG, "Response: " + response.toString());
                         JSONArray results = null;
+                        JSONArray placesArray = new JSONArray();
                         try {
                             results = response.getJSONArray("results");
                             for (int i = 0; i < results.length(); i++) {
                                 JSONObject result = results.getJSONObject(i);
+
+                                if (!result.has("rating")) {
+                                    continue;
+                                }
+
+                                JSONObject place = new JSONObject();
+                                String placeName = result.getString("name");
+                                String placeAddress = result.getString("vicinity");
                                 double rating = result.getDouble("rating");
-                                Log.i(TAG, "rating: " + Double.toString(rating));
+
+                                place.put("name", placeName);
+                                place.put("address", placeAddress);
+                                place.put("rating", rating);
+                                placesArray.put(place);
                             }
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
+
+                        // set up the RecyclerView
+                        RecyclerView recyclerView = findViewById(R.id.search_results);
+                        recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
+                        adapter = new MyRecyclerViewAdapter(MainActivity.this, placesArray);
+                        adapter.setClickListener(MainActivity.this);
+                        recyclerView.setAdapter(adapter);
                     }
                 }, error -> {
                     // TODO: Handle error
