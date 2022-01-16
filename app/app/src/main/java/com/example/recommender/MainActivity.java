@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -30,15 +31,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements MyRecyclerViewAdapter.ItemClickListener {
 
@@ -134,9 +127,13 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
             e.printStackTrace();
         }
 
+        // Start Service for recording GPS
         Intent intent = new Intent(this, GPSLogger.class); // Build the intent for the service
         startForegroundService(intent);
-//        startService(intent);
+
+        // Start Service for processing GPS
+        intent = new Intent(this, GPSProcesser.class); // Build the intent for the service
+        startForegroundService(intent);
     }
 
     @Override
