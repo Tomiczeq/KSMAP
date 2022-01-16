@@ -149,6 +149,7 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
         this.requestQueue.add(jsonObjectRequest);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onStart() {
         super.onStart();
@@ -161,10 +162,9 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
             e.printStackTrace();
         }
 
-        Context context = getApplicationContext();
-        Intent intent = new Intent(context, GPSLogger.class); // Build the intent for the service
+        Intent intent = new Intent(this, GPSLogger.class); // Build the intent for the service
 //        context.startForegroundService(intent);
-//        context.startService(intent);
+        startService(intent);
     }
 
     @Override

@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.core.app.ActivityCompat;
@@ -21,6 +22,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.logging.Logger;
 
 public class GPSLogger extends Service {
 
@@ -86,37 +88,72 @@ public class GPSLogger extends Service {
         }
     }
 
+    private class LoggerThread extends Thread {
+
+        @Override
+        public void run() {
+            Looper.prepare();
+            Context context = getApplicationContext();
+            locationManager = (LocationManager) context.getSystemService(LOCATION_SERVICE);
+            isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            Log.i(TAG, "GPSEnabled: " + Boolean.toString(isGPSEnabled));
+            Criteria criteria = new Criteria();
+            criteria.setAccuracy(Criteria.ACCURACY_FINE);
+            while (true) {
+                GPSLogger.LocationListener locationListener = null;
+                try {
+                    locationListener = new GPSLogger.LocationListener(LocationManager.GPS_PROVIDER);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                locationManager.requestSingleUpdate(criteria, locationListener, null);
+                try {
+                    Log.i(TAG, "sleeping");
+                    Thread.sleep(15000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    break;
+                }
+            }
+            Looper.loop();
+        }
+    }
+
+
     public GPSLogger() throws IOException {
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "started");
 
+        LoggerThread logger = new LoggerThread();
+        logger.start();
         // Getting GPS status
-        Context context = getApplicationContext();
-        locationManager = (LocationManager) context.getSystemService(LOCATION_SERVICE);
-        isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        Log.i(TAG, "GPSEnabled: " + Boolean.toString(isGPSEnabled));
+//        Context context = getApplicationContext();
+//        locationManager = (LocationManager) context.getSystemService(LOCATION_SERVICE);
+//        isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+//        Log.i(TAG, "GPSEnabled: " + Boolean.toString(isGPSEnabled));
 
-        Criteria criteria = new Criteria();
-        criteria.setAccuracy(Criteria.ACCURACY_FINE);
-        while (true) {
-            LocationListener locationListener = null;
-            try {
-                locationListener = new LocationListener(LocationManager.GPS_PROVIDER);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            locationManager.requestSingleUpdate(criteria, locationListener, null);
-            try {
-                Log.i(TAG, "sleeping");
-                Thread.sleep(15000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                break;
-            }
-        }
+//        Criteria criteria = new Criteria();
+//        criteria.setAccuracy(Criteria.ACCURACY_FINE);
+//        while (true) {
+//            LocationListener locationListener = null;
+//            try {
+//                locationListener = new LocationListener(LocationManager.GPS_PROVIDER);
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//            locationManager.requestSingleUpdate(criteria, locationListener, null);
+//            try {
+//                Log.i(TAG, "sleeping");
+//                Thread.sleep(15000);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//                break;
+//            }
+//        }
         // by returning this we make sure the service is restarted if the system kills the service
+        Log.i(TAG, "returning start_sticky");
         return START_STICKY;
     }
 
