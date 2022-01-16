@@ -19,6 +19,8 @@ import androidx.core.content.ContextCompat;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class GPSLogger extends Service {
 
@@ -43,8 +45,13 @@ public class GPSLogger extends Service {
 
                 Context context = getBaseContext();
                 if (context != null) {
-                    Log.e(TAG, "context is not null");
-                    File file = new File(context.getFilesDir(), "gpslog.txt");
+                    SimpleDateFormat formatter = new SimpleDateFormat("dd-MM-yyyy");
+                    Date date = new Date();
+                    String day = formatter.format(date);
+                    Log.i(TAG, "day: " + day);
+
+                    String filename = day + ".txt";
+                    File file = new File(context.getFilesDir(), filename);
                     FileWriter fr = new FileWriter(file, true);
                     fr.write(timestamp + "," + latitude + "," + longitude);
                     fr.close();
@@ -103,7 +110,7 @@ public class GPSLogger extends Service {
             locationManager.requestSingleUpdate(criteria, locationListener, null);
             try {
                 Log.i(TAG, "sleeping");
-                Thread.sleep(1000);
+                Thread.sleep(15000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
                 break;
