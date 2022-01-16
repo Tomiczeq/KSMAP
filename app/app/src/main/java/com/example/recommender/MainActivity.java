@@ -4,6 +4,8 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Context;
 import android.content.Intent;
@@ -14,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -35,12 +38,15 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.ArrayList;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements MyRecyclerViewAdapter.ItemClickListener {
 
     private static final String TAG = "MainActivity";
 
     private RequestQueue requestQueue;
+
+    MyRecyclerViewAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,12 +65,38 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        JSONArray array = new JSONArray();
+        JSONObject item = new JSONObject();
+        try {
+            item.put("name", "Test");
+            item.put("vicinity", "PodLabutkou");
+            item.put("rating", 4.8);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        array.put(item);
+        JSONObject item1 = new JSONObject();
+        try {
+            item1.put("name", "Test2");
+            item1.put("vicinity", "PodLabutkou");
+            item1.put("rating", 4.8);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        array.put(item1);
+
+        // set up the RecyclerView
+        RecyclerView recyclerView = findViewById(R.id.search_results);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+//        adapter = new MyRecyclerViewAdapter(this, animalNames);
+        adapter = new MyRecyclerViewAdapter(this, array);
+        adapter.setClickListener(this);
+        recyclerView.setAdapter(adapter);
     }
 
     public RequestQueue getRequestQueue() {
         if (requestQueue == null) {
-            // getApplicationContext() is key, it keeps you from leaking the
-            // Activity or BroadcastReceiver if someone passes one in.
             requestQueue = Volley.newRequestQueue(getApplicationContext());
         }
         return requestQueue;
@@ -113,5 +145,10 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(context, GPSLogger.class); // Build the intent for the service
 //        context.startForegroundService(intent);
 //        context.startService(intent);
+    }
+
+    @Override
+    public void onItemClick(View view, int position) throws JSONException {
+        Toast.makeText(this, "You clicked " + adapter.getItem(position).toString() + " on row number " + position, Toast.LENGTH_SHORT).show();
     }
 }
