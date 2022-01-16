@@ -65,34 +65,6 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                 }
             }
         });
-
-//        JSONArray array = new JSONArray();
-//        JSONObject item = new JSONObject();
-//        try {
-//            item.put("name", "Test");
-//            item.put("vicinity", "PodLabutkou");
-//            item.put("rating", 4.8);
-//        } catch (JSONException e) {
-//            e.printStackTrace();
-//        }
-//        array.put(item);
-//        JSONObject item1 = new JSONObject();
-//        try {
-//            item1.put("name", "Test2");
-//            item1.put("vicinity", "PodLabutkou");
-//            item1.put("rating", 4.8);
-//        } catch (JSONException e) {
-//            e.printStackTrace();
-//        }
-//        array.put(item1);
-
-//        // set up the RecyclerView
-//        RecyclerView recyclerView = findViewById(R.id.search_results);
-//        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-////        adapter = new MyRecyclerViewAdapter(this, animalNames);
-//        adapter = new MyRecyclerViewAdapter(this, array);
-//        adapter.setClickListener(this);
-//        recyclerView.setAdapter(adapter);
     }
 
     public RequestQueue getRequestQueue() {
@@ -163,8 +135,8 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
         }
 
         Intent intent = new Intent(this, GPSLogger.class); // Build the intent for the service
-//        context.startForegroundService(intent);
-        startService(intent);
+        startForegroundService(intent);
+//        startService(intent);
     }
 
     @Override
