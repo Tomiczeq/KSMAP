@@ -5,9 +5,12 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
+
+import androidx.annotation.RequiresApi;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -28,6 +31,7 @@ public class GPSProcesser extends Service {
 
     private class ProcesserThread extends Thread {
 
+        @RequiresApi(api = Build.VERSION_CODES.N)
         @Override
         public void run() {
             Looper.prepare();
@@ -37,7 +41,12 @@ public class GPSProcesser extends Service {
                 File dir = context.getFilesDir();
 
                 List<List<Number>> points = Util.getPoints(dir);
+                Log.e(TAG, "Points: " + points.toString());
+                List<List<Number>> staypoints = Util.getStaypoints(points, 100, 15*60*1000);
+                Log.e(TAG, "Staypoints: " + staypoints.toString());
 
+                List<Integer> labels = Util.DBSCAN(74, 4, staypoints);
+                Log.e(TAG, "labels: " + labels.toString());
 
                 try {
                     Thread.sleep(5000);
