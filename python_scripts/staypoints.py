@@ -51,7 +51,7 @@ def compute_mean_coord(data, i, j):
     return mean_lat, mean_lon
 
 
-def get_staypoints(data, dist_thresh=30, time_thresh=60*30):
+def get_staypoints(data, dist_thresh=100, time_thresh=60*30):
     i = 0
     num = len(data)
     staypoints = []
