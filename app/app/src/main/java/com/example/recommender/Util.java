@@ -167,6 +167,7 @@ public class Util {
                 if (anotherNeighbors.size() >= minPts) {
                     for (int k = 0; k < anotherNeighbors.size(); k++) {
                         int anotherIndex = anotherNeighbors.get(k);
+                        neighbors.add(anotherIndex);
                     }
                 }
 
