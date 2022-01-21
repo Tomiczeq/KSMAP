@@ -1,5 +1,6 @@
 package com.example.recommender;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -8,11 +9,13 @@ import androidx.fragment.app.DialogFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.app.Activity;
 import android.app.Dialog;
 import android.app.TimePickerDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
@@ -21,6 +24,7 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Log;
 import android.view.View;
@@ -36,6 +40,15 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.ResolvableApiException;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResponse;
+import com.google.android.gms.location.LocationSettingsStatusCodes;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -65,6 +78,79 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
 
     MyRecyclerViewAdapter adapter;
 
+    /** Method to turn on GPS **/
+    public void turnGPSOn(){
+        LocationRequest locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                .addLocationRequest(locationRequest);
+        Task<LocationSettingsResponse> result =
+                LocationServices.getSettingsClient(this).checkLocationSettings(builder.build());
+
+        result.addOnCompleteListener(new OnCompleteListener<LocationSettingsResponse>() {
+            @Override
+            public void onComplete(@NonNull Task<LocationSettingsResponse> task) {
+                try {
+                    LocationSettingsResponse response = task.getResult(ApiException.class);
+                    // All location settings are satisfied. The client can initialize location
+                    // requests here.
+                } catch (ApiException exception) {
+                    switch (exception.getStatusCode()) {
+                        case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+                            // Location settings are not satisfied. But could be fixed by showing the
+                            // user a dialog.
+                            try {
+                                // Cast to a resolvable exception.
+                                ResolvableApiException resolvable = (ResolvableApiException) exception;
+                                // Show the dialog by calling startResolutionForResult(),
+                                // and check the result in onActivityResult().
+                                resolvable.startResolutionForResult(
+                                        MainActivity.this,
+                                        LocationRequest.PRIORITY_HIGH_ACCURACY);
+                            } catch (IntentSender.SendIntentException e) {
+                                // Ignore the error.
+                            } catch (ClassCastException e) {
+                                // Ignore, should be an impossible error.
+                            }
+                            break;
+                        case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
+                            // Location settings are not satisfied. However, we have no way to fix the
+                            // settings so we won't show the dialog.
+                            break;
+                    }
+                }
+            }
+        });
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Intent intent;
+        switch (requestCode) {
+            case LocationRequest.PRIORITY_HIGH_ACCURACY:
+                switch (resultCode) {
+                    case Activity.RESULT_OK:
+                        // All required changes were successfully made
+                        Log.i(TAG, "onActivityResult: GPS Enabled by user");
+                        // Start Service for recording GPS
+                        intent = new Intent(this, GPSLogger.class); // Build the intent for the service
+                        startForegroundService(intent);
+                        break;
+                    case Activity.RESULT_CANCELED:
+                        // The user was asked to change settings, but chose not to
+                        Log.i(TAG, "onActivityResult: User rejected GPS request");
+                        intent = new Intent(this, GPSLogger.class); // Build the intent for the service
+                        stopService(intent);
+                        break;
+                    default:
+                        break;
+                }
+                break;
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -74,6 +160,10 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
         findViewById(R.id.search_restaurants).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+                if (!isGPSEnabled) {
+                    turnGPSOn();
+                }
                 try {
                     String[] futureCoords = Util.getFutureCoords(MainActivity.this.getFilesDir(), "topWh.json", selectedHour);
                     placesArray = new JSONArray();
@@ -81,6 +171,12 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                     if ((currentHour == selectedHour) || (futureCoords == null)){
                         Log.e(TAG, "using current coords");
                         String[] currentCoords = getCurrentCoords();
+                        if (currentCoords == null) {
+                            Toast.makeText(MainActivity.this,
+                                    "No GPS location found", Toast.LENGTH_LONG).show();
+                            actualizeResults();
+                            return;
+                        }
                         getRestaurants(currentCoords);
                     } else {
                         Log.e(TAG, "using future coords");
@@ -150,6 +246,9 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
 
     public String[] getCurrentCoords() {
         Location locationGPS = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        if (locationGPS == null) {
+            return null;
+        }
         String[] coords = new String[2];
         coords[0] = Double.toString(locationGPS.getLatitude());
         coords[1] = Double.toString(locationGPS.getLongitude());
@@ -243,18 +342,22 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                 sortPlacesArray();
 
                 Log.e(TAG, "placesArray: " + placesArray.toString());
-                // set up the RecyclerView
-                RecyclerView recyclerView = findViewById(R.id.search_results);
-                recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
-                adapter = new MyRecyclerViewAdapter(MainActivity.this, placesArray);
-                adapter.setClickListener(MainActivity.this);
-                recyclerView.setAdapter(adapter);
+                actualizeResults();
             }
         }, error -> {
             Log.e(TAG, "places api request error");
         });
         // Access the RequestQueue through your singleton class.
         this.requestQueue.add(jsonObjectRequest);
+    }
+
+    public void actualizeResults() {
+        // set up the RecyclerView
+        RecyclerView recyclerView = findViewById(R.id.search_results);
+        recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
+        adapter = new MyRecyclerViewAdapter(MainActivity.this, placesArray);
+        adapter.setClickListener(MainActivity.this);
+        recyclerView.setAdapter(adapter);
     }
 
     private void requestRestaurants(String url) throws IOException {
@@ -329,13 +432,18 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
             e.printStackTrace();
         }
 
-        // Start Service for recording GPS
-        Intent intent = new Intent(this, GPSLogger.class); // Build the intent for the service
+        // Start Service for processing GPS
+        Intent intent = new Intent(this, GPSProcesser.class); // Build the intent for the service
         startForegroundService(intent);
 
-        // Start Service for processing GPS
-        intent = new Intent(this, GPSProcesser.class); // Build the intent for the service
-        startForegroundService(intent);
+        boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        if (!isGPSEnabled) {
+            turnGPSOn();
+        } else {
+            intent = new Intent(this, GPSLogger.class); // Build the intent for the service
+            startForegroundService(intent);
+
+        }
     }
 
     @Override
