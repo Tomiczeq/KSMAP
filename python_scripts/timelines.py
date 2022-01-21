@@ -15,6 +15,12 @@ def getTimelines(user_staypoints):
 
         # TODO what if there is difference greater than one day between
         # arrival and leaving?
+        # i = 0
+        # while arrival + i <= leaving:
+        #     hour = (arrival + i) % 24
+        #     print(hour)
+        #     i += 1
+        # increase date after passing 23?
         if dates[0] == dates[1]:
             date = dates[0]
             timeline = timelines.get(date, dict())

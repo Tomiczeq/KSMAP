@@ -1,7 +1,9 @@
+import os
 import json
 import sys
 import numpy as np
 from datetime import datetime
+from filter_users import getTrajectories
 
 from staypoints import getTrajectoryPoints
 from staypoints import get_staypoints
@@ -11,8 +13,11 @@ from timelines import getTimelines
 
 from total_topn import topN, topWN, topDN, topHN, topWHN, topDHN
 
+from time import time
+
 #from neural import simpleNN
 #from neural import train_model
+from collections import defaultdict
 
 
 INPUT_FILE = "/home/tomas/git/smap/python_scripts/filtered_users.json"
@@ -30,14 +35,17 @@ def predict_topn(topn, timeline):
             prediction = clusterId
             break
     correct = 0
+    num_sig = 0
     if prediction is None:
-        return correct
+        return correct, num_sig
 
     for i in range(24):
         if prediction in timeline[1].get(i, [-2]):
+            if prediction != -1:
+                num_sig += 1
             correct += 1
 
-    return correct
+    return correct, num_sig
 
 
 def predict_topwn(topwn, timeline):
@@ -50,7 +58,8 @@ def predict_topwn(topwn, timeline):
         dayType = "workday"
 
     topn = topwn[dayType]
-    return predict_topn(topn, timeline)
+    prediction, num_sig = predict_topn(topn, timeline)
+    return prediction
 
 
 def predict_topdn(topdn, timeline):
@@ -58,11 +67,13 @@ def predict_topdn(topdn, timeline):
     datetime_object = datetime.strptime(day, '%Y-%m-%d')
     weekday = datetime_object.weekday()
     topn = topdn[weekday]
-    return predict_topn(topn, timeline)
+    prediction, num_sig = predict_topn(topn, timeline)
+    return prediction
 
 
 def predict_tophn(tophn, timeline):
     correct = 0
+    num_sig = 0
     for i in range(24):
         toph_sorted = sorted(tophn[i].items(), key=lambda x: x[1], reverse=True)
         prediction = None
@@ -76,7 +87,9 @@ def predict_tophn(tophn, timeline):
             continue
         if prediction in timeline[1].get(i, [-2]):
             correct += 1
-    return correct
+            if prediction != -1:
+                num_sig += 1
+    return correct, num_sig
 
 
 def predict_topwhn(topwhn, timeline):
@@ -88,7 +101,9 @@ def predict_topwhn(topwhn, timeline):
     else:
         dayType = "workday"
     tophn = topwhn[dayType]
-    return predict_tophn(tophn, timeline)
+    prediction, num_sig = predict_tophn(tophn, timeline)
+    print(f"correct: {prediction} num_sig: {num_sig}")
+    return prediction, num_sig
 
 
 def predict_topdhn(topdhn, timeline):
@@ -96,7 +111,8 @@ def predict_topdhn(topdhn, timeline):
     datetime_object = datetime.strptime(day, '%Y-%m-%d')
     weekday = datetime_object.weekday()
     tophn = topdhn[weekday]
-    return predict_tophn(tophn, timeline)
+    prediction, num_sig = predict_tophn(tophn, timeline)
+    return prediction
 
 
 def getContinuousTimelines(timelines):
@@ -153,80 +169,6 @@ def getContinuousTimeline(timeline):
     return continuous_timeline
 
 
-#def simple_nn(continuous_lst, num_clusters, back):
-#    ahead = 1
-#    train_data = []
-#    labels = []
-#    for i in range(0, len(continuous_lst) - back - ahead):
-#        history = continuous_lst[i:back+i]
-#        label = continuous_lst[back + i + ahead]
-#
-#        array = []
-#        for j in range(len(history)):
-#            onehot_array = [0 for i in range(num_clusters)]
-#            if history[j] != -1:
-#                onehot_array[history[j]] = 1
-#            array.append(onehot_array)
-#        label_lst = [0 for i in range(num_clusters)]
-#        label_lst[label] = 1
-#        labels.append(label_lst)
-#        #prediction_hour = np.zeros(24)
-#        #prediction_hour[(i + back + ahead) % 24] = 1
-#        ##train_data.append([array, prediction_hour])
-#        train_data.append(array)
-#
-#    train_data = np.array(train_data).reshape(len(train_data), back * num_clusters)
-#    labels = np.array(labels).reshape(len(train_data), num_clusters)
-#
-#    model = simpleNN(10, back, num_clusters)
-#    train_model(model, train_data, labels, 1, 5)
-#
-#    return model, train_data
-
-
-#def predict_simple_nn(model, train_data, timeline, num_clusters, back, ahead):
-#    labels = []
-#    for clId in timeline:
-#        label_lst = [0 for i in range(num_clusters)]
-#
-#        if clId != -1:
-#            label_lst[clId] = 1
-#        labels.append(label_lst)
-#
-#    merged = []
-#    merged.extend(train_data[-1 * num_clusters * (back + ahead - 1)])
-#
-#    p_timeline = []
-#    for i in range(len(timeline)):
-#        lst = [0 for j in range(num_clusters)]
-#        if timeline[i] != -1:
-#            lst[timeline[i]] = 1
-#        p_timeline.extend(lst)
-#    merged.extend(p_timeline)
-#
-#    total_correct = 0
-#    
-#    # print("hah")
-#    # print(timeline)
-#    for i in range(len(timeline)):
-#        if timeline[i] != -1:
-#            back_data = merged[i * num_clusters:(back + i) * num_clusters]
-#            to_predict = merged[(back + i) * num_clusters:(back + i + 1) * num_clusters]
-#            correct = to_predict.index(1)
-#            back_data = np.array([back_data]).reshape(1, len(back_data))
-#            # print(f"i: {i}")
-#            # print(f"back_data: {back_data}")
-#            prediction = model.predict(back_data)
-#            predicted = np.argmax(prediction[0])
-#            # print(f"to_predict: {to_predict}")
-#            # print(f"prediction: {prediction}")
-#            # print(f"correct: {correct}")
-#            # print(f"predicted: {predicted}")
-#            if correct == predicted:
-#                total_correct += 1
-#    return total_correct
-
-
 def getPredictable(timeline):
 
     predictable = 0
@@ -246,188 +188,332 @@ def getPredictable(timeline):
     return predictable
 
 
+def getPoints(directory, min_hours=12):
+    path = os.path.join(directory, "Trajectory")
+    trajectories = getTrajectories(path)
+
+    points = []
+    for trajectory in trajectories:
+        t_points = getTrajectoryPoints(trajectory)
+        points.extend(t_points)
+
+    by_date = defaultdict(set)
+    for point in points:
+        by_date[point["date"]].add(point["hour"])
+
+    days = set()
+    for k, v in by_date.items():
+        if len(v) >= 12:
+            days.add(k)
+
+    points_by_date = defaultdict(list)
+    points = sorted(points, key=lambda x: x["timestamp"])
+    for point in points:
+        if point["date"] in days:
+            points_by_date[point["date"]].append(point)
+
+    points_by_date = sorted(points_by_date.items(), key=lambda x: x[0])
+
+   # print(directory, f"num_long_traj: {len(days)}")
+    return points_by_date
+
+
 if __name__ == "__main__":
 
-    with open(INPUT_FILE, "r") as f:
-        data = json.load(f)
+    user_path = "/home/tomas/git/smap/data/geolife/128"
+    user_points = getPoints(user_path)
 
-    current_user = None
-    for user, trajectories in data.items():
-        user = user.split("/")[-1]
-        current_user = user
+    time_thresh = 60*30
+    staypoint_dist = 200
+    min_hours = 24
+    dbscan_distance = 200
 
-        #if user == "003":
-        #    paths = trajectories
-        #    current_user = user
-        #    break
+    topn_total = 0
+    topn_sig_total = 0
+    topwn_total = 0
+    topdn_total = 0
+    tophn_total = 0
+    topwhn_total = 0
+    topwhn_sig_total = 0
+    topdhn_total = 0
+    simple_nn_total = 0
+    predictable_total = 0
 
-        trajectory_dates = []
+    training_staypoints = []
+    predicting_points = None
 
-        for trajectory in trajectories:
-            date = trajectory.split("/")[-1][:8]
-            year = date[:4]
-            month = date[4:6]
-            day = date[6:8]
-            date = year + "-" + month + "-" + day
-            datetime_object = datetime.strptime(date, '%Y-%m-%d')
-            timestamp = datetime_object.timestamp()
-            trajectory_dates.append((date, timestamp, trajectory))
+    pp = 0
+    for day, predicting_points in user_points:
+        pp += 1
 
-        trajectory_dates.sort(key=lambda x: x[1])
+        if len(training_staypoints) == 0:
+            training_staypoints.extend(get_staypoints(predicting_points, time_thresh=time_thresh, dist_thresh=staypoint_dist))
+            continue
 
-        processing = set()
+        stime = time()
+        predicting_staypoints = get_staypoints(predicting_points, time_thresh=time_thresh, dist_thresh=staypoint_dist)
+        #print(f"staypoints duration: {time() - stime}")
+        #print(f"Day: {pp} predicting staypoints: {len(predicting_staypoints)} num train staypoints: {len(training_staypoints)}")
+        
+        stime = time()
+        get_clusters(training_staypoints, meters=dbscan_distance, min_samples=min_hours)
+        label_clusters(training_staypoints, predicting_staypoints, meters=dbscan_distance)
+        #print(f"DBSCAN duration: {time() - stime}")
 
-        paths = []
-        processing_points = []
-        previous_timelines = None
-        topn = None
+        #print(predicting_staypoints)
+        training_timelines = getTimelines(training_staypoints)
+        #print(training_timelines)
+        predicting_timeline = getTimelines(predicting_staypoints)
 
-        topn_total = 0
-        topwn_total = 0
-        topdn_total = 0
-        tophn_total = 0
-        topwhn_total = 0
-        topdhn_total = 0
-        simple_nn_total = 0
-        predictable_total = 0
+        training_staypoints.extend(predicting_staypoints)
 
-        training_paths = []
+        #print(predicting_staypoints)
+        if not predicting_timeline:
+            continue
+        else:
+            predicting_timeline = predicting_timeline[0]
 
-        processed_paths = set()
-        training_dates = set()
-        predicting_date = None
-        training_points = []
+        predictable = getPredictable(predicting_timeline)
+        if not predictable:
+            continue
 
-        distance = 200
-        time_thresh = 60*15
-        min_hours = 24
+        topn = topN(training_timelines)
+        topwn = topWN(training_timelines)
+        topdn = topDN(training_timelines)
+        tophn = topHN(training_timelines)
+        topwhn = topWHN(training_timelines)
+        topdhn = topDHN(training_timelines)
 
-        i = 0
-        while len(processed_paths) != len(trajectory_dates):
-            print()
-            print(f"{len(processed_paths)}/{len(trajectory_dates)}")
-            for trajectory in trajectory_dates:
-                if trajectory[0] not in processing:
-                    processing.add(trajectory[0])
-                    predicting_date = trajectory[0]
-                    break
-                else:
-                    training_dates.add(trajectory[0])
+        topn_result, topn_sig = predict_topn(topn, predicting_timeline)
+        topwn_result = predict_topwn(topwn, predicting_timeline)
+        topdn_result = predict_topdn(topdn, predicting_timeline)
+        tophn_result, tophn_sig = predict_tophn(tophn, predicting_timeline)
+        topwhn_result, topwhn_sig = predict_topwhn(topwhn, predicting_timeline)
+        topdhn_result = predict_topdhn(topdhn, predicting_timeline)
 
-            # print(f"training_dates: {training_dates}")
-            # print(f"predicting_date: {predicting_date}")
+        topn_total += topn_result
+        topn_sig_total += topn_sig
+        topwn_total += topwn_result
+        topdn_total += topdn_result
+        tophn_total += tophn_result
+        topwhn_total += topwhn_result
+        topwhn_sig_total += topwhn_sig
+        topdhn_total += topdhn_result
+        predictable_total += predictable
+        print(f"day: {day} topn: {topn_result} topwn: {topwn_result} topdn: {topdn_result} tophn: {tophn_result} topwhn: {topwhn_result}  topdhn: {topdhn_result} predictable: {predictable}")
+    print(f"topn: {topn_total} topwn: {topwn_total} topdn: {topdn_total} tophn: {tophn_total} topwhn: {topwhn_total} topdhn: {topdhn_total} simple_nn: {simple_nn_total} predictable_total: {predictable_total}")
 
-            training_paths = []
-            predicting_paths = []
-            for trajectory in trajectory_dates:
-                if trajectory[0] in training_dates:
-                    training_paths.append(trajectory[2])
-                elif trajectory[0] == predicting_date:
-                    predicting_paths.append(trajectory[2])
+    results = {
+        "topn": topn_total,
+        "topn_sig": topn_sig_total,
+        "topwn": topwn_total,
+        "topdn": topdn_total,
+        "tophn": tophn_total,
+        "topwhn": topwhn_total,
+        "topwhn_sig": topwhn_sig_total,
+        "topdhn": topdhn_total,
+        "predictable": predictable_total
+    }
 
-            # print(f"training_paths: {training_paths}")
-            # print(f"predicting_paths: {predicting_paths}")
-
-            for path in training_paths:
-                if path not in processed_paths:
-                    points = getTrajectoryPoints(path)
-                    training_points.extend(points)
-                    processed_paths.add(path)
-
-            predicting_points = []
-            for path in predicting_paths:
-                points = getTrajectoryPoints(path)
-                predicting_points.extend(points)
-
-            training_points = sorted(training_points, key=lambda x: x["timestamp"])
-            predicting_points = sorted(predicting_points, key=lambda x: x["timestamp"])
-
-            training_staypoints = get_staypoints(training_points, time_thresh=time_thresh)
-            predicting_staypoints = get_staypoints(predicting_points, time_thresh=time_thresh)
-
-            get_clusters(training_staypoints, meters=distance, min_samples=min_hours)
-            label_clusters(training_staypoints, predicting_staypoints, meters=distance)
-
-            num_cores = 0
-            for staypoint in training_staypoints:
-                if staypoint.get("core"):
-                    num_cores += 1
-
-            num_labeled = 0
-            for staypoint in predicting_staypoints:
-                if staypoint["cluster_id"] != -2:
-                    num_labeled += 1
+    with open("results/128.json", "w") as f:
+        f.write(json.dumps(results))
 
 
-            # print(f"cores: {num_cores}")
-            # print(f"labeled: {num_labeled}")
+    #        training_points = sorted(training_points, key=lambda x: x["timestamp"])
+    #        predicting_points = sorted(predicting_points, key=lambda x: x["timestamp"])
 
-            training_timelines = getTimelines(training_staypoints)
-            predicting_timeline = getTimelines(predicting_staypoints)
+    #with open(INPUT_FILE, "r") as f:
+    #    data = json.load(f)
 
-            # print(f"training_timelines: {training_timelines}")
-            # print(f"predicting_timeline: {predicting_timeline}")
+    #current_user = None
+    #for user, trajectories in data.items():
+    #    user = user.split("/")[-1]
+    #    current_user = user
 
-            if not predicting_timeline:
-                continue
-            else:
-                predicting_timeline = predicting_timeline[0]
+    #    #if user == "003":
+    #    #    paths = trajectories
+    #    #    current_user = user
+    #    #    break
 
-            predictable = getPredictable(predicting_timeline)
-            predictable_total += predictable
+    #    trajectory_dates = []
 
-            if not predictable:
-                continue
+    #    for trajectory in trajectories:
+    #        date = trajectory.split("/")[-1][:8]
+    #        year = date[:4]
+    #        month = date[4:6]
+    #        day = date[6:8]
+    #        date = year + "-" + month + "-" + day
+    #        datetime_object = datetime.strptime(date, '%Y-%m-%d')
+    #        timestamp = datetime_object.timestamp()
+    #        trajectory_dates.append((date, timestamp, trajectory))
 
-            # TODO predictable may not be 0
-            if not training_timelines:
-                continue
+    #    trajectory_dates.sort(key=lambda x: x[1])
 
-            topn = topN(training_timelines)
-            topwn = topWN(training_timelines)
-            topdn = topDN(training_timelines)
-            tophn = topHN(training_timelines)
-            topwhn = topWHN(training_timelines)
-            topdhn = topDHN(training_timelines)
+    #    processing = set()
 
-            #continuous_timelines, num_clusters = getContinuousTimelines(training_timelines)
-            #c_predicting_timeline = getContinuousTimeline(predicting_timeline)
+    #    paths = []
+    #    processing_points = []
+    #    previous_timelines = None
+    #    topn = None
 
-            #back = 5
-            #ahead = 1
-            #model_simple_nn, train_data = simple_nn(continuous_timelines, num_clusters, back)
-            #result_simple_nn = predict_simple_nn(model_simple_nn, train_data, c_predicting_timeline, num_clusters, back, ahead)
-            #simple_nn_total += result_simple_nn
+    #    topn_total = 0
+    #    topwn_total = 0
+    #    topdn_total = 0
+    #    tophn_total = 0
+    #    topwhn_total = 0
+    #    topdhn_total = 0
+    #    simple_nn_total = 0
+    #    predictable_total = 0
+
+    #    training_paths = []
+
+    #    processed_paths = set()
+    #    training_dates = set()
+    #    predicting_date = None
+    #    #training_points = []
+    #    training_staypoints = []
+
+    #    staypoint_dist = 100
+    #    time_thresh = 60*15
+    #    dbscan_distance = 150
+    #    min_hours = 24
+
+    #    i = 0
+    #    while len(processed_paths) != len(trajectory_dates):
+    #        print()
+    #        print(f"{len(processed_paths)}/{len(trajectory_dates)}")
+    #        for trajectory in trajectory_dates:
+    #            if trajectory[0] not in processing:
+    #                processing.add(trajectory[0])
+    #                predicting_date = trajectory[0]
+    #                break
+    #            else:
+    #                training_dates.add(trajectory[0])
+
+    #        # print(f"training_dates: {training_dates}")
+    #        # print(f"predicting_date: {predicting_date}")
+
+    #        training_paths = []
+    #        predicting_paths = []
+    #        for trajectory in trajectory_dates:
+    #            if trajectory[0] in training_dates:
+    #                training_paths.append(trajectory[2])
+    #            elif trajectory[0] == predicting_date:
+    #                predicting_paths.append(trajectory[2])
+
+    #        # print(f"training_paths: {training_paths}")
+    #        # print(f"predicting_paths: {predicting_paths}")
+
+    #        training_points = []
+    #        for path in training_paths:
+    #            if path not in processed_paths:
+    #                points = getTrajectoryPoints(path)
+    #                training_points.extend(points)
+    #                processed_paths.add(path)
+
+    #        predicting_points = []
+    #        for path in predicting_paths:
+    #            points = getTrajectoryPoints(path)
+    #            predicting_points.extend(points)
+
+    #        training_points = sorted(training_points, key=lambda x: x["timestamp"])
+    #        predicting_points = sorted(predicting_points, key=lambda x: x["timestamp"])
+
+    #        stime = time()
+    #        training_staypoints.extend(get_staypoints(training_points, time_thresh=time_thresh, dist_thresh=staypoint_dist))
+    #        predicting_staypoints = get_staypoints(predicting_points, time_thresh=time_thresh, dist_thresh=staypoint_dist)
+    #        print(f"staypoints duration: {time() - stime}")
+
+    #        stime = time()
+    #        get_clusters(training_staypoints, meters=dbscan_distance, min_samples=min_hours)
+    #        label_clusters(training_staypoints, predicting_staypoints, meters=dbscan_distance)
+    #        print(f"DBSCAN duration: {time() - stime}")
+
+    #        num_cores = 0
+    #        for staypoint in training_staypoints:
+    #            if staypoint.get("core"):
+    #                num_cores += 1
+
+    #        num_labeled = 0
+    #        for staypoint in predicting_staypoints:
+    #            if staypoint["cluster_id"] != -2:
+    #                num_labeled += 1
 
 
-            topn_result = predict_topn(topn, predicting_timeline)
-            topwn_result = predict_topwn(topwn, predicting_timeline)
-            topdn_result = predict_topdn(topdn, predicting_timeline)
-            tophn_result = predict_tophn(tophn, predicting_timeline)
-            topwhn_result = predict_topwhn(topwhn, predicting_timeline)
-            topdhn_result = predict_topdhn(topdhn, predicting_timeline)
+    #        # print(f"cores: {num_cores}")
+    #        # print(f"labeled: {num_labeled}")
 
-            topn_total += topn_result
-            topwn_total += topwn_result
-            topdn_total += topdn_result
-            tophn_total += tophn_result
-            topwhn_total += topwhn_result
-            topdhn_total += topdhn_result
+    #        training_timelines = getTimelines(training_staypoints)
+    #        predicting_timeline = getTimelines(predicting_staypoints)
 
-            predictable = getPredictable(predicting_timeline)
-            predictable_total += predictable
-            print(f"topn: {topn_result} topwn: {topwn_result} topdn: {topdn_result} tophn: {tophn_result} topwhn: {topwhn_result}  topdhn: {topdhn_result} predictable: {predictable}")
-        print(f"topn: {topn_total} topwn: {topwn_total} topdn: {topdn_total} tophn: {tophn_total} topwhn: {topwhn_total} topdhn: {topdhn_total} simple_nn: {simple_nn_total} predictable_total: {predictable_total}")
+    #        # print(f"training_timelines: {training_timelines}")
+    #        # print(f"predicting_timeline: {predicting_timeline}")
 
-        results = {
-            "topn": topn_total,
-            "topwn": topwn_total,
-            "topdn": topdn_total,
-            "tophn": tophn_total,
-            "topwhn": topwhn_total,
-            "topdhn": topdhn_total,
-            "predictable": predictable_total
-        }
+    #        if not predicting_timeline:
+    #            continue
+    #        else:
+    #            predicting_timeline = predicting_timeline[0]
 
-        with open(f"results/{current_user}.json", "w") as f:
-            f.write(json.dumps(results))
+    #        predictable = getPredictable(predicting_timeline)
+    #        predictable_total += predictable
+
+    #        if not predictable:
+    #            continue
+
+    #        # TODO predictable may not be 0
+    #        if not training_timelines:
+    #            continue
+
+    #        topn = topN(training_timelines)
+    #        topwn = topWN(training_timelines)
+    #        topdn = topDN(training_timelines)
+    #        tophn = topHN(training_timelines)
+    #        topwhn = topWHN(training_timelines)
+    #        topdhn = topDHN(training_timelines)
+
+    #        #continuous_timelines, num_clusters = getContinuousTimelines(training_timelines)
+    #        #c_predicting_timeline = getContinuousTimeline(predicting_timeline)
+
+    #        #back = 5
+    #        #ahead = 1
+    #        #model_simple_nn, train_data = simple_nn(continuous_timelines, num_clusters, back)
+    #        #result_simple_nn = predict_simple_nn(model_simple_nn, train_data, c_predicting_timeline, num_clusters, back, ahead)
+    #        #simple_nn_total += result_simple_nn
+
+
+    #        topn_result = predict_topn(topn, predicting_timeline)
+    #        topwn_result = predict_topwn(topwn, predicting_timeline)
+    #        topdn_result = predict_topdn(topdn, predicting_timeline)
+    #        tophn_result = predict_tophn(tophn, predicting_timeline)
+    #        topwhn_result = predict_topwhn(topwhn, predicting_timeline)
+    #        topdhn_result = predict_topdhn(topdhn, predicting_timeline)
+
+    #        topn_total += topn_result
+    #        topwn_total += topwn_result
+    #        topdn_total += topdn_result
+    #        tophn_total += tophn_result
+    #        topwhn_total += topwhn_result
+    #        topdhn_total += topdhn_result
+
+    #        predictable = getPredictable(predicting_timeline)
+    #        predictable_total += predictable
+    #        print(f"topn: {topn_result} topwn: {topwn_result} topdn: {topdn_result} tophn: {tophn_result} topwhn: {topwhn_result}  topdhn: {topdhn_result} predictable: {predictable}")
+    #    print(f"topn: {topn_total} topwn: {topwn_total} topdn: {topdn_total} tophn: {tophn_total} topwhn: {topwhn_total} topdhn: {topdhn_total} simple_nn: {simple_nn_total} predictable_total: {predictable_total}")
+
+    #    results = {
+    #        "topn": topn_total,
+    #        "topwn": topwn_total,
+    #        "topdn": topdn_total,
+    #        "tophn": tophn_total,
+    #        "topwhn": topwhn_total,
+    #        "topdhn": topdhn_total,
+    #        "predictable": predictable_total
+    #    }
+
+    #    directory = f"results_{staypoint_dist}_{time_thresh/60}_{dbscan_distance}_{min_hours}"
+    #    if not os.path.exists(directory):
+    #        os.makedirs(directory)
+
+    #    path = os.path.join(directory, f"{current_user}.json")
+    #    with open(path, "w") as f:
+    #        f.write(json.dumps(results))

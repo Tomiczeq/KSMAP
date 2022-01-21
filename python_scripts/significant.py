@@ -49,6 +49,7 @@ def dbscan(data, distance, minHours):
         currentPoint = coordinates[i]
         neighborsIds = getNeighbors(currentPoint, coordinates, distance)
 
+        # mark noise
         # if len(neighborsIds) < minPts:
         if stayTime(neighborsIds, data) < minHours:
             labels[i] = -1
@@ -62,31 +63,39 @@ def dbscan(data, distance, minHours):
         while j < len(neighborsIds):
             index = neighborsIds[j]
 
+            # if label is noise, mark him
             if labels[index] == -1:
                 labels[index] = clusterId
 
+            # do not search for neighbors of already processed points
             if labels[index] != -2:
                 j += 1
                 continue
 
+            # label him with clusterId
             labels[index] = clusterId
 
+            # get neighbors
             anotherNeighbors = getNeighbors(coordinates[index],
                                             coordinates, distance)
 
+            # is he corepoint? if yes then add them all to neighbors
             # if len(anotherNeighbors) >= minPts:
-            if stayTime(neighborsIds, data) >= minHours:
+            if stayTime(anotherNeighbors, data) >= minHours:
                 data[index]["core"] = True
                 neighborsIds.extend(anotherNeighbors)
 
+            # no corepoint, fine
             j += 1
+
     # Number of clusters in labels, ignoring noise if present.
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise_ = list(labels).count(-1)
 
-    print("Estimated number of clusters: %d" % n_clusters_)
-    print("Estimated number of noise points: %d" % n_noise_)
-    print(f"Total points: {len(labels)}")
+    #print("Estimated number of clusters: %d" % n_clusters_)
+    #print("Estimated number of noise points: %d" % n_noise_)
+    #print(f"Total points: {len(labels)}")
+    #print(labels)
     return labels
 
 
@@ -136,19 +145,7 @@ def label_clusters(training_staypoints, predicting_staypoints, meters=1000):
                     break
 
         if "cluster_id" not in p_staypoint:
-            for t_staypoint in training_staypoints:
-                if t_staypoint["cluster_id"] == -1:
-                    t_coords = [t_staypoint["latitude"], t_staypoint["longitude"]]
-                    distance = haversineDist(p_coords, t_coords)
-                    if distance < meters:
-                        p_staypoint["cluster_id"] = t_staypoint["cluster_id"]
-                        break
-
-        if "cluster_id" not in p_staypoint:
-            p_staypoint["cluster_id"] = -2
-
-
-
+            p_staypoint["cluster_id"] = -1
 
 
 if __name__ == "__main__":

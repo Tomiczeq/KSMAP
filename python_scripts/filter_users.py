@@ -2,6 +2,7 @@ import os
 import json
 
 from datetime import datetime
+from collections import defaultdict
 
 
 DATA_DIR = "/home/tomas/git/smap/data/geolife"
@@ -47,6 +48,39 @@ def getTimestamp(line):
 def skipFirstLines(f):
     for i in range(6):
         f.readline()
+
+def getTrajectoryPoints(trajectory):
+
+    points = []
+    with open(trajectory, "r") as f:
+        skipFirstLines(f)
+
+        for line in f:
+            point = getLineFields(line)
+            points.append(point)
+    return points
+
+def filterTrajectories(directory, min_period=60*60*3, min_days=90):
+    path = os.path.join(directory, "Trajectory")
+    trajectories = getTrajectories(path)
+
+    points = []
+    for trajectory in trajectories:
+        t_points = getTrajectoryPoints(trajectory)
+        points.extend(t_points)
+
+    points = sorted(points, key=lambda x: x["timestamp"])
+    by_date = defaultdict(set)
+    for point in points:
+        by_date[point["date"]].add(point["hour"])
+
+    total_days = 0
+    for k, v in by_date.items():
+        if len(v) >= 12:
+            total_days += 1
+        #print(directory, f"date: {k} delta: {(max(v) - min(v))/3600} hodin")
+    if total_days > 15:
+        print(directory, f"num_long_traj: {total_days}")
 
 
 def filterByPeriod(directory, min_period=60*60*3):
@@ -99,11 +133,13 @@ if __name__ == "__main__":
 
     filtered_directories = dict()
     for directory in directories:
-        if not filterByDays(directory):
-            continue
+        #if not filterByDays(directory):
+        #    continue
 
-        trajectories = filterByPeriod(directory)
-        filtered_directories[directory] = trajectories
+        #trajectories = filterByPeriod(directory)
+        #filtered_directories[directory] = trajectories
 
-    with open(SAVE_FILE, "w") as f:
-        f.write(json.dumps(filtered_directories))
+        filterTrajectories(directory)
+
+    #with open(SAVE_FILE, "w") as f:
+    #    f.write(json.dumps(filtered_directories))

@@ -536,6 +536,14 @@ public class Util {
     }
 
     static String[] getFutureCoords(File dir, String filename,int selectedHour) throws Exception {
+        File f = new File(dir, filename);
+        if (!f.exists()) {
+            return null;
+        }
+        f = new File(dir, "clustersCoords.json");
+        if (!f.exists()) {
+            return null;
+        }
         ArrayList<ArrayList<ArrayList<Integer>>> topWH = loadTopWH(dir, filename);
 
         int currentDayType = getCurrentDayType();
