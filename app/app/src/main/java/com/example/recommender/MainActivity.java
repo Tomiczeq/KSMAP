@@ -47,6 +47,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -77,12 +78,13 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                     String[] futureCoords = Util.getFutureCoords(MainActivity.this.getFilesDir(), "topWh.json", selectedHour);
                     placesArray = new JSONArray();
                     int currentHour = Util.getCurrentHour();
-                    if ((currentHour != selectedHour) && (futureCoords != null)){
-                        getRestaurants(futureCoords);
-                    } else {
+                    if ((currentHour == selectedHour) || (futureCoords == null)){
+                        Log.e(TAG, "using current coords");
                         String[] currentCoords = getCurrentCoords();
                         getRestaurants(currentCoords);
-
+                    } else {
+                        Log.e(TAG, "using future coords");
+                        getRestaurants(futureCoords);
                     }
                 } catch (IOException | URISyntaxException | JSONException e) {
                     Log.e(TAG, "places api error");
@@ -224,24 +226,23 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                     }
 
                     boolean isOpened = Util.isOpened(opening_hours, selectedHour, selectedMinute);
-                    if (!isOpened) {
-                        return;
+                    if (isOpened) {
+                        JSONObject place = new JSONObject();
+                        place.put("name", name);
+                        place.put("opened", Boolean.toString(isOpened));
+                        place.put("address", address);
+                        place.put("rating", rating);
+                        place.put("website", website);
+                        place.put("id", placeId);
+                        placesArray.put(place);
                     }
-
-                    JSONObject place = new JSONObject();
-                    place.put("name", name);
-                    place.put("opened", Boolean.toString(isOpened));
-                    place.put("address", address);
-                    place.put("rating", rating);
-                    place.put("website", website);
-                    place.put("id", placeId);
-                    placesArray.put(place);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
 
                 sortPlacesArray();
 
+                Log.e(TAG, "placesArray: " + placesArray.toString());
                 // set up the RecyclerView
                 RecyclerView recyclerView = findViewById(R.id.search_results);
                 recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
