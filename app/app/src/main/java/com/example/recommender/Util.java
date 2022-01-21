@@ -11,18 +11,22 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
+//import org.apache.commons.io.IOUtils;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -149,7 +153,29 @@ public class Util {
         return totalTime;
     }
 
-    static void DBSCAN(int distance, int minHours, List<List<Number>> staypoints) {
+    static String[] computeClusterCoords(ArrayList<Double[]> coords) {
+        double latSum = 0;
+        double lonSum = 0;
+        for (int i = 0; i < coords.size(); i++) {
+            latSum += coords.get(i)[0];
+            lonSum += coords.get(i)[1];
+        }
+        String[] clusterCoords = new String[2];
+        clusterCoords[0] = Double.toString(latSum / coords.size());
+        clusterCoords[1] = Double.toString(lonSum / coords.size());
+        return clusterCoords;
+    }
+
+    static Double[] getStaypointCoords(List<Number> staypoint) {
+        Double lat = (double) staypoint.get(0);
+        Double lon = (double) staypoint.get(1);
+        Double[] coords = new Double[2];
+        coords[0] = lat;
+        coords[1] = lon;
+        return coords;
+    }
+
+    static ArrayList<String[]> DBSCAN(int distance, int minHours, List<List<Number>> staypoints) {
 
         List<Integer> labels = new ArrayList<Integer>();
         List<Integer> cores = new ArrayList<Integer>();
@@ -157,6 +183,8 @@ public class Util {
             labels.add(-2);
             cores.add(0);
         }
+
+        ArrayList<String[]> clustersCoords = new ArrayList<String[]>();
 
         int clusterId = -1;
         for (int i = 0; i < staypoints.size(); i++) {
@@ -175,6 +203,8 @@ public class Util {
             }
 
             clusterId += 1;
+            ArrayList<Double[]> coords = new ArrayList<Double[]>();
+            coords.add(getStaypointCoords(staypoints.get(i)));
             labels.set(i, clusterId);
             cores.set(i, 1);
 
@@ -192,6 +222,7 @@ public class Util {
                 }
 
                 labels.set(index, clusterId);
+                coords.add(getStaypointCoords(staypoints.get(i)));
 
                 List<Integer> anotherNeighbors = getNeighbors(staypoints.get(index), staypoints, distance);
                 if (spendedTime(staypoints.get(index), anotherNeighbors, staypoints) >= minHours) {
@@ -205,6 +236,10 @@ public class Util {
 
                 j++;
             }
+
+            String[] clusterCoords = computeClusterCoords(coords);
+            Log.e(TAG, "clusterCoords: " + clusterCoords);
+            clustersCoords.add(clusterCoords);
         }
 
         for (int i = 0; i < staypoints.size(); i++) {
@@ -212,7 +247,7 @@ public class Util {
             staypoints.get(i).add(cores.get(i));
         }
 
-        return;
+        return clustersCoords;
     }
 
     static List<Double> getMeanCoords(List<List<Number>> points) {
@@ -400,6 +435,24 @@ public class Util {
         return topWH;
     }
 
+    static void saveClusterCoords(ArrayList<String[]> clustersCoords, File f) {
+        JSONArray js = new JSONArray();
+        for (int i = 0; i < clustersCoords.size(); i++) {
+            JSONArray coords = new JSONArray();
+            coords.put(clustersCoords.get(i)[0]);
+            coords.put(clustersCoords.get(i)[1]);
+            js.put(coords);
+        }
+        try {
+            FileWriter file = new FileWriter(f);
+            file.write(js.toString());
+            Log.i(TAG, "Successfully Saved JSON clustersCoords");
+            file.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     static void saveJson(JSONArray js, File f) {
         try {
             FileWriter file = new FileWriter(f);
@@ -411,16 +464,151 @@ public class Util {
         }
     }
 
-    static String[] getFutureCoords(int predictionHour) {
-        String[] coords = new String[2];
-        coords[0] = "50.2099580";
-        coords[1] = "15.8354156";
+    public static String convertStreamToString(InputStream is) throws Exception {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+        StringBuilder sb = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line).append("\n");
+        }
+        reader.close();
+        return sb.toString();
+    }
+
+    public static ArrayList<ArrayList<ArrayList<Integer>>> loadTopWH(File dir, String filename) throws Exception {
+        File file = new File(dir, filename);
+        FileInputStream inputStream = new FileInputStream(file);
+        String content = convertStreamToString(inputStream);
+//        String result = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+        JSONArray array = new JSONArray(content);
+        ArrayList<ArrayList<ArrayList<Integer>>> topWH = new ArrayList<ArrayList<ArrayList<Integer>>>();
+        for (int i = 0; i < array.length(); i++) {
+            JSONArray dayTypeTopWH = array.getJSONArray(i);
+            ArrayList<ArrayList<Integer>> dayTypeArray = new ArrayList<ArrayList<Integer>>();
+            for (int j = 0; j < dayTypeTopWH.length(); j++) {
+                JSONArray hourTopWH = dayTypeTopWH.getJSONArray(j);
+                ArrayList<Integer> hourArray = new ArrayList<Integer>();
+                for (int k = 0; k < hourTopWH.length(); k++) {
+                    hourArray.add(hourTopWH.getInt(k));
+                }
+                dayTypeArray.add(hourArray);
+            }
+            topWH.add(dayTypeArray);
+        }
+        return topWH;
+    }
+
+    static int predictId(ArrayList<ArrayList<ArrayList<Integer>>> topWH, int dayType, int hour) {
+        ArrayList<ArrayList<Integer>> dayTypeTopWH = topWH.get(dayType);
+        ArrayList<Integer> hourTopWH = dayTypeTopWH.get(hour);
+
+        int maxId = -1;
+        int maxValue = 0;
+        for (int i = 0; i < hourTopWH.size(); i++) {
+            int value = hourTopWH.get(i);
+            if (value > maxValue) {
+                maxId = i;
+                maxValue = value;
+            }
+        }
+        return maxId;
+    }
+
+    public static ArrayList<String[]> loadClustersCoords(File dir, String filename) throws Exception {
+        File file = new File(dir, filename);
+        FileInputStream inputStream = new FileInputStream(file);
+        String content = convertStreamToString(inputStream);
+//        String result = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+        JSONArray array = new JSONArray(content);
+        ArrayList<String[]> clustersCoords = new ArrayList<String[]>();
+        for (int i = 0; i < array.length(); i++) {
+            String[] coords = new String[2];
+            coords[0] = array.getJSONArray(i).getString(0);
+            coords[1] = array.getJSONArray(i).getString(1);
+            clustersCoords.add(coords);
+        }
+        return clustersCoords;
+    }
+
+    static String[] getClusterCoords(File dir, String filename, int predictedId) throws Exception {
+        ArrayList<String[]> clustersCoords = loadClustersCoords(dir, filename);
+        return clustersCoords.get(predictedId - 1);
+    }
+
+    static String[] getFutureCoords(File dir, String filename,int selectedHour) throws Exception {
+        ArrayList<ArrayList<ArrayList<Integer>>> topWH = loadTopWH(dir, filename);
+
+        int currentDayType = getCurrentDayType();
+        Integer predictedId = predictId(topWH, currentDayType, selectedHour);
+        if (predictedId == -1) {
+            return null;
+        }
+        String[] coords = getClusterCoords(dir, "clustersCoords.json", predictedId);
         return coords;
     }
 
     // TODO
-    static boolean isOpened(JSONObject opening_hours, int requested_hour) {
+    static boolean isOpened(JSONObject opening_hours, int selectedHour, int selectedMinute) throws JSONException {
+        Date date = new Date();
+        int currentDay = date.getDay();
+        JSONArray periods = opening_hours.getJSONArray("periods");
+        Log.e(TAG, "selectedHour: " + selectedHour + "selectedMinute:" + selectedMinute);
+        for (int i = 0; i < periods.length(); i++) {
+            JSONObject dayPeriod = periods.getJSONObject(i);
+            JSONObject close = dayPeriod.getJSONObject("close");
+            JSONObject open = dayPeriod.getJSONObject("open");
+            int day = open.getInt("day");
+
+            int openHour = Integer.parseInt(open.getString("time").substring(0, 2));
+            int openMinute = Integer.parseInt(open.getString("time").substring(2, 4));
+
+            int closeHour = Integer.parseInt(close.getString("time").substring(0, 2));
+            int closeMinute = Integer.parseInt(close.getString("time").substring(2, 4));
+
+            Date selectedDate = new Date();
+            selectedDate.setHours(selectedHour);
+            selectedDate.setMinutes(selectedMinute);
+            Date openDate = new Date();
+            openDate.setHours(openHour);
+            openDate.setMinutes(openMinute);
+            Date closeDate = new Date();
+            closeDate.setHours(closeHour);
+            closeDate.setMinutes(closeMinute);
+
+            if (currentDay == day) {
+                Log.e(TAG, "openHour: " + openHour + "openMinute:" + openMinute);
+                Log.e(TAG, "closeHour: " + closeHour + "closeMinute:" + closeMinute);
+
+                boolean openbefore = openDate.before(selectedDate);
+                boolean closeafter = closeDate.after(selectedDate);
+                Log.e(TAG, "openbefore: " + openbefore + "  closeafter: " + closeafter);
+
+                if (openDate.before(selectedDate) && closeDate.after(selectedDate)) {
+                    return true;
+                } else {
+                    return false;
+                }
+
+            }
+        }
         return true;
+    }
+
+    public static int getCurrentHour() {
+        return new Date().getHours();
+    }
+
+    public static int getCurrentDay() {
+        int day = new Date().getDay();
+        return day;
+    }
+
+    public static int getCurrentDayType() {
+        int day = getCurrentDay();
+        if (day == 0 || day == 6) {
+            return 1;
+        }
+        return 0;
     }
 
 }

@@ -45,7 +45,10 @@ public class GPSProcesser extends Service {
 
                 List<List<Number>> points = Util.getPoints(dir);
                 List<List<Number>> staypoints = Util.getStaypoints(points, 100, 15*60*1000);
-                Util.DBSCAN(200, 5, staypoints);
+                ArrayList<String[]> clustersCoords = Util.DBSCAN(200, 5, staypoints);
+
+                File f = new File(dir, "clustersCoords.json");
+                Util.saveClusterCoords(clustersCoords, f);
                 Integer[][][] topWH = Util.TopWH(staypoints);
                 JSONArray js = Util.topToJson(topWH);
 

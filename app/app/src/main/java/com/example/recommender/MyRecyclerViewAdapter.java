@@ -43,6 +43,7 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
             holder.placeRatting.setText(placeData.getString("rating"));
             holder.placeWebsite.setText(placeData.getString("website"));
             holder.placeAddress.setText(placeData.getString("address"));
+//            holder.placeOpen.setText(placeData.getString("opened"));
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -61,6 +62,7 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
         TextView placeAddress;
         TextView placeRatting;
         TextView placeWebsite;
+        TextView placeOpen;
 
         ViewHolder(View itemView) {
             super(itemView);
@@ -68,6 +70,7 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
             placeAddress = itemView.findViewById(R.id.placeAddress);
             placeRatting = itemView.findViewById(R.id.placeRatting);
             placeWebsite = itemView.findViewById(R.id.placeWebsite);
+//            placeOpen = itemView.findViewById(R.id.placeOpen);
             itemView.setOnClickListener(this);
         }
 

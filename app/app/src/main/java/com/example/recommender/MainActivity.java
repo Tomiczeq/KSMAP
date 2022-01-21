@@ -4,20 +4,29 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.DialogFragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.app.Dialog;
+import android.app.TimePickerDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.format.DateFormat;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.TimePicker;
 import android.widget.Toast;
 
 import com.android.volley.Request;
@@ -36,7 +45,10 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity implements MyRecyclerViewAdapter.ItemClickListener {
 
@@ -45,6 +57,10 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
     private RequestQueue requestQueue;
     public static JSONArray placesArray = new JSONArray();
     public static int requested_hour = 0;
+    public static Button setTime;
+    public static int selectedHour;
+    public static int selectedMinute;
+    protected LocationManager locationManager;
 
     MyRecyclerViewAdapter adapter;
 
@@ -58,29 +74,83 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
             @Override
             public void onClick(View v) {
                 try {
-                    String[] currentCoords = getCurrentCoords();
-                    String[] futureCoords = Util.getFutureCoords(18);
-
+                    String[] futureCoords = Util.getFutureCoords(MainActivity.this.getFilesDir(), "topWh.json", selectedHour);
                     placesArray = new JSONArray();
-
-                    if (currentCoords != null) {
-                        getRestaurants(currentCoords);
-                    }
-                    if (futureCoords != null) {
+                    int currentHour = Util.getCurrentHour();
+                    if ((currentHour != selectedHour) && (futureCoords != null)){
                         getRestaurants(futureCoords);
+                    } else {
+                        String[] currentCoords = getCurrentCoords();
+                        getRestaurants(currentCoords);
+
                     }
-                } catch (IOException | URISyntaxException e) {
+                } catch (IOException | URISyntaxException | JSONException e) {
                     Log.e(TAG, "places api error");
+                    e.printStackTrace();
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         });
+
+        Date date = new Date();
+        selectedHour = date.getHours();
+        selectedMinute = date.getMinutes();
+        setTime = (Button) findViewById(R.id.time_picker);
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+        String time = sdf.format(date);
+        setTime.setText(time);
+        locationManager = (LocationManager) this.getSystemService(LOCATION_SERVICE);
+    }
+
+    public static class TimePickerFragment extends DialogFragment
+            implements TimePickerDialog.OnTimeSetListener {
+
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            // Use the current time as the default values for the picker
+            final Calendar c = Calendar.getInstance();
+            int hour = c.get(Calendar.HOUR_OF_DAY);
+            int minute = c.get(Calendar.MINUTE);
+
+            // Create a new instance of TimePickerDialog and return it
+            return new TimePickerDialog(getActivity(), this, hour, minute,
+                    DateFormat.is24HourFormat(getActivity()));
+        }
+
+        public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
+            // Do something with the time chosen by the user
+            Date currentDate = new Date();
+            Date date = new Date();
+            date.setHours(hourOfDay);
+            date.setMinutes(minute);
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+
+            String time;
+            if (currentDate.after(date)) {
+                time = sdf.format(currentDate);
+                hourOfDay = currentDate.getHours();
+                minute = currentDate.getMinutes();
+            } else {
+                time = sdf.format(date);
+            }
+            setTime.setText(time);
+            selectedHour = hourOfDay;
+            selectedMinute = minute;
+        }
+    }
+
+
+    public void showTimePickerDialog(View v) {
+        DialogFragment newFragment = new TimePickerFragment();
+        newFragment.show(getSupportFragmentManager(), "timePicker");
     }
 
     public String[] getCurrentCoords() {
+        Location locationGPS = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         String[] coords = new String[2];
-        coords[0] = "50.0711510";
-        coords[1] = "14.4006789";
+        coords[0] = Double.toString(locationGPS.getLatitude());
+        coords[1] = Double.toString(locationGPS.getLongitude());
         return coords;
     }
 
@@ -153,13 +223,14 @@ public class MainActivity extends AppCompatActivity implements MyRecyclerViewAda
                         return;
                     }
 
-                    boolean isOpened = Util.isOpened(opening_hours, requested_hour);
+                    boolean isOpened = Util.isOpened(opening_hours, selectedHour, selectedMinute);
                     if (!isOpened) {
                         return;
                     }
 
                     JSONObject place = new JSONObject();
                     place.put("name", name);
+                    place.put("opened", Boolean.toString(isOpened));
                     place.put("address", address);
                     place.put("rating", rating);
                     place.put("website", website);
