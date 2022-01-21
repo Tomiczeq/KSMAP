@@ -40,8 +40,9 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
         try {
             JSONObject placeData = placesData.getJSONObject(position);
             holder.placeName.setText(placeData.getString("name"));
-            holder.placeAddress.setText(placeData.getString("address"));
             holder.placeRatting.setText(placeData.getString("rating"));
+            holder.placeWebsite.setText(placeData.getString("website"));
+            holder.placeAddress.setText(placeData.getString("address"));
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -59,12 +60,14 @@ public class MyRecyclerViewAdapter extends RecyclerView.Adapter<MyRecyclerViewAd
         TextView placeName;
         TextView placeAddress;
         TextView placeRatting;
+        TextView placeWebsite;
 
         ViewHolder(View itemView) {
             super(itemView);
             placeName = itemView.findViewById(R.id.placeName);
             placeAddress = itemView.findViewById(R.id.placeAddress);
             placeRatting = itemView.findViewById(R.id.placeRatting);
+            placeWebsite = itemView.findViewById(R.id.placeWebsite);
             itemView.setOnClickListener(this);
         }
 

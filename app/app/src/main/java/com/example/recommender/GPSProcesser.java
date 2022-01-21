@@ -12,6 +12,8 @@ import android.util.Log;
 
 import androidx.annotation.RequiresApi;
 
+import org.json.JSONArray;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -19,6 +21,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -41,15 +44,16 @@ public class GPSProcesser extends Service {
                 File dir = context.getFilesDir();
 
                 List<List<Number>> points = Util.getPoints(dir);
-                Log.e(TAG, "Points: " + points.toString());
                 List<List<Number>> staypoints = Util.getStaypoints(points, 100, 15*60*1000);
-                Log.e(TAG, "Staypoints: " + staypoints.toString());
+                Util.DBSCAN(200, 5, staypoints);
+                Integer[][][] topWH = Util.TopWH(staypoints);
+                JSONArray js = Util.topToJson(topWH);
 
-                List<Integer> labels = Util.DBSCAN(74, 4, staypoints);
-                Log.e(TAG, "labels: " + labels.toString());
+                File file = new File(GPSProcesser.this.getFilesDir(), "topWh.json");
+                Util.saveJson(js, file);
 
                 try {
-                    Thread.sleep(5000);
+                    Thread.sleep(15000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                     break;
